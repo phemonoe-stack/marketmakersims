@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-emerald-400">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>USS Delta - Quant Submarine Market Maker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            mono: ['"Share Tech Mono"', 'monospace'],
+            orbitron: ['Orbitron', 'sans-serif'],
+          },
+          colors: {
+            sonar: {
+              bg: '#030d14',
+              panel: '#071822',
+              border: '#0ea5e9',
+              green: '#10b981',
+              cyan: '#06b6d4',
+              amber: '#f59e0b',
+              red: '#ef4444',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Share Tech Mono', monospace;
+      background-color: #02080d;
+      background-image: radial-gradient(circle at 50% 50%, #061c2d 0%, #02080d 100%);
+      user-select: none;
+      overflow-x: hidden;
+    }
+
+    .crt::after {
+      content: " ";
+      display: block;
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 0, 0.03));
+      z-index: 20;
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+    }
+
+    .glow-cyan {
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.25), inset 0 0 15px rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.4);
+    }
+
+    .glow-green {
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.25), inset 0 0 15px rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    .glow-red {
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.4), inset 0 0 20px rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.7);
+    }
+
+    .text-glow-cyan {
+      text-shadow: 0 0 8px rgba(6, 182, 212, 0.7);
+    }
+
+    .text-glow-green {
+      text-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
+    }
+
+    .text-glow-red {
+      text-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+    }
+
+    /* Submarine Graphic CSS Pitch Rotation */
+    .sub-pitch-container {
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Custom tactical sliders */
+    input[type=range] {
+      -webkit-appearance: none;
+      background: #0b2535;
+      border-radius: 4px;
+      height: 8px;
+      border: 1px solid #0ea5e9;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 20px;
+      width: 14px;
+      border-radius: 2px;
+      background: #06b6d4;
+      cursor: pointer;
+      box-shadow: 0 0 10px #06b6d4;
+    }
+
+    /* Subtle grid overlay */
+    .grid-bg {
+      background-size: 30px 30px;
+      background-image: 
+        linear-gradient(to right, rgba(14, 165, 233, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(14, 165, 233, 0.05) 1px, transparent 1px);
+    }
+  </style>
+</head>
+
+<body class="h-full flex flex-col justify-between p-2 md:p-4 text-xs md:text-sm grid-bg crt relative selection:bg-cyan-500 selection:text-black">
+
+  <header class="flex flex-wrap items-center justify-between border-b border-cyan-800/60 pb-3 mb-3 bg-sonar-panel/80 p-3 rounded-lg glow-cyan">
+    <div class="flex items-center space-x-3">
+      <div class="w-3 h-3 rounded-full bg-emerald-400 animate-ping"></div>
+      <div>
+        <h1 class="font-orbitron text-base md:text-xl font-black tracking-wider text-cyan-400 text-glow-cyan flex items-center gap-2">
+          <span>USS DELTA</span>
+          <span class="text-xs font-mono px-2 py-0.5 bg-cyan-950 border border-cyan-500/50 text-cyan-300 rounded">SSN-97 MM</span>
+        </h1>
+        <p class="text-[10px] text-slate-400 font-mono">AVELLANEDA-STOIKOV TACTICAL LIQUIDITY SUBMARINE</p>
+      </div>
+    </div>
+
+    <!-- Status Displays & Audio Controls -->
+    <div class="flex items-center gap-4 mt-2 sm:mt-0">
+      <div class="hidden md:flex flex-col text-right">
+        <span class="text-[10px] text-slate-400">DEPTH DRIFT MODEL</span>
+        <span class="text-cyan-300 font-bold">GBM + JUMP DIFFUSION</span>
+      </div>
+      <div class="h-8 w-px bg-cyan-800/60 hidden md:block"></div>
+      
+      <button id="audio-toggle" class="flex items-center gap-2 px-3 py-1.5 rounded bg-slate-900 border border-cyan-500/40 text-cyan-400 hover:bg-cyan-950/50 transition">
+        <span id="audio-icon">🔊</span>
+        <span id="audio-status" class="font-mono text-xs">SONAR AUDIO: ON</span>
+      </button>
+
+      <button id="sim-toggle" class="flex items-center gap-2 px-4 py-1.5 rounded font-orbitron font-bold bg-emerald-600 hover:bg-emerald-500 text-slate-950 transition shadow-lg shadow-emerald-900/40">
+        <span id="sim-icon">⏸</span>
+        <span id="sim-status">PAUSE ENGINE</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1">
+
+    <!-- LEFT COLUMN: Sonar Waterfall / Price & Depth Chart (8 Cols) -->
+    <section class="lg:col-span-8 flex flex-col gap-3">
+      <div class="relative bg-sonar-panel/90 rounded-lg p-2 glow-cyan flex-1 flex flex-col min-h-[360px] md:min-h-[420px]">
+        
+        <!-- Canvas Overlay Controls -->
+        <div class="absolute top-4 left-4 z-10 flex gap-2">
+          <span class="px-2 py-1 rounded bg-slate-950/80 border border-cyan-500/40 text-[11px] text-cyan-300 font-mono">
+            DEPTH (MID): $<span id="hud-mid">100.00</span>
+          </span>
+          <span id="hud-spread-badge" class="px-2 py-1 rounded bg-slate-950/80 border border-emerald-500/40 text-[11px] text-emerald-300 font-mono">
+            SPREAD: $<span id="hud-spread">0.32</span>
+          </span>
+        </div>
+
+        <div class="absolute top-4 right-4 z-10 flex gap-2">
+          <span class="px-2 py-1 rounded bg-slate-950/80 border border-amber-500/40 text-[11px] text-amber-300 font-mono flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            VOLATILITY: <span id="hud-vol">18.5%</span>
+          </span>
+        </div>
+
+        <!-- Main Chart Canvas -->
+        <div class="relative w-full flex-1 h-full min-h-[280px]">
+          <canvas id="sonarChartCanvas" class="w-full h-full block rounded bg-slate-950/60"></canvas>
+        </div>
+
+        <!-- Chart Legend / Tactical Footer -->
+        <div class="flex flex-wrap items-center justify-between text-[11px] pt-2 px-2 border-t border-slate-800 text-slate-400">
+          <div class="flex items-center gap-4">
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-cyan-400"></span> Mid-Price (Sea Surface)</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-emerald-400"></span> Bid Torpedo Target</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-red-400"></span> Ask Depth Target</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-amber-400 border border-dashed"></span> Reservation $r$</span>
+          </div>
+          <div id="last-event-hud" class="text-cyan-300 font-mono italic">
+            TACTICAL RADAR: ACTIVE NOISE FLUTTER
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div class="bg-sonar-panel/80 p-2.5 rounded border border-cyan-900/60 flex flex-col">
+          <span class="text-[10px] text-slate-400">CUMULATIVE PnL</span>
+          <span id="metric-pnl" class="text-lg md:text-xl font-bold font-orbitron text-emerald-400 text-glow-green">$0.00</span>
+          <span class="text-[9px] text-slate-500">INTEGRATED SPREAD CAPTURE</span>
+        </div>
+
+        <div class="bg-sonar-panel/80 p-2.5 rounded border border-cyan-900/60 flex flex-col">
+          <span class="text-[10px] text-slate-400">FILL RATE (PINGS/SEC)</span>
+          <span id="metric-fillrate" class="text-lg md:text-xl font-bold font-orbitron text-cyan-300 text-glow-cyan">0.0 /s</span>
+          <span class="text-[9px] text-slate-500">POISSON $\lambda(S)$ INTENSITY</span>
+        </div>
+
+        <div class="bg-sonar-panel/80 p-2.5 rounded border border-cyan-900/60 flex flex-col">
+          <span class="text-[10px] text-slate-400">SHARPE RATIO</span>
+          <span id="metric-sharpe" class="text-lg md:text-xl font-bold font-orbitron text-amber-300">0.00</span>
+          <span class="text-[9px] text-slate-500">RISK-ADJUSTED YIELD</span>
+        </div>
+
+        <div class="bg-sonar-panel/80 p-2.5 rounded border border-cyan-900/60 flex flex-col">
+          <span class="text-[10px] text-slate-400">SPREAD CAPTURED</span>
+          <span id="metric-captured" class="text-lg md:text-xl font-bold font-orbitron text-emerald-300">$0.00</span>
+          <span class="text-[9px] text-slate-500">TOTAL ROUND-TRIP FEES</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: Submarine Pitch Graphic, Radar Sweep, Controls (4 Cols) -->
+    <section class="lg:col-span-4 flex flex-col gap-3">
+      
+      <!-- SUBMARINE TILT & BALLAST STATUS -->
+      <div class="bg-sonar-panel/90 rounded-lg p-3 glow-cyan flex flex-col gap-3">
+        <div class="flex justify-between items-center border-b border-cyan-900/60 pb-2">
+          <span class="font-orbitron text-xs font-bold text-cyan-300">SUBMARINE TRIM & INVENTORY</span>
+          <span id="metric-inventory-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/50">
+            Q = 0 (BALANCED)
+          </span>
+        </div>
+
+        <!-- 3D/CSS Visual Submarine Hull Pitch -->
+        <div class="relative h-28 bg-slate-950/80 rounded border border-cyan-900/80 flex items-center justify-center overflow-hidden grid-bg">
+          <!-- Horizon Pitch Line -->
+          <div id="horizon-line" class="absolute w-full h-px bg-cyan-500/30"></div>
+          
+          <!-- Submarine Graphic Object -->
+          <div id="sub-hull" class="sub-pitch-container relative w-48 h-12 flex items-center justify-center transition-transform duration-300">
+            <!-- Hull SVG -->
+            <svg viewBox="0 0 200 60" class="w-full h-full drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
+              <!-- Main Hull -->
+              <path d="M 20 30 Q 30 15 100 15 Q 170 15 185 30 Q 170 45 100 45 Q 30 45 20 30 Z" fill="#0f2b3c" stroke="#06b6d4" stroke-width="2"/>
+              <!-- Conning Tower -->
+              <path d="M 85 15 L 90 5 L 115 5 L 115 15 Z" fill="#163e56" stroke="#06b6d4" stroke-width="1.5"/>
+              <!-- Periscope -->
+              <path d="M 105 5 L 105 0 L 110 0" fill="none" stroke="#06b6d4" stroke-width="1.5"/>
+              <!-- Propeller Tail -->
+              <path d="M 10 22 L 20 30 L 10 38 Z" fill="#06b6d4"/>
+              <!-- Waterline/Glow Windows -->
+              <circle cx="60" cy="30" r="2.5" fill="#10b981"/>
+              <circle cx="80" cy="30" r="2.5" fill="#10b981"/>
+              <circle cx="100" cy="30" r="2.5" fill="#10b981"/>
+              <circle cx="120" cy="30" r="2.5" fill="#10b981"/>
+              <circle cx="140" cy="30" r="2.5" fill="#10b981"/>
+            </svg>
+            <!-- Vector Force Arrows -->
+            <div id="ballast-vector" class="absolute font-mono text-[10px] text-amber-400 font-bold tracking-tight"></div>
+          </div>
+
+          <!-- Pitch Angle Indicator HUD -->
+          <div class="absolute bottom-1 left-2 text-[9px] font-mono text-cyan-400/80">
+            TILT: <span id="sub-pitch-angle">0.0°</span>
+          </div>
+          <div class="absolute bottom-1 right-2 text-[9px] font-mono text-cyan-400/80">
+            MAX CAP: <span id="hud-max-inv">±20</span>
+          </div>
+        </div>
+
+        <!-- Inventory Gauge Bar -->
+        <div>
+          <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+            <span>SHORT (MAX)</span>
+            <span>NEUTRAL</span>
+            <span>LONG (MAX)</span>
+          </div>
+          <div class="w-full h-3 bg-slate-900 rounded border border-cyan-800/80 relative overflow-hidden">
+            <!-- Center Line -->
+            <div class="absolute left-1/2 top-0 bottom-0 w-0.5 bg-slate-600 z-10"></div>
+            <!-- Inventory Bar -->
+            <div id="inventory-bar" class="absolute top-0 bottom-0 bg-emerald-500 transition-all duration-200" style="left: 50%; width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-sonar-panel/90 rounded-lg p-3 glow-cyan flex-1 flex flex-col gap-4">
+        <div class="flex justify-between items-center border-b border-cyan-900/60 pb-2">
+          <span class="font-orbitron text-xs font-bold text-cyan-300">TACTICAL HELM & COCKPIT</span>
+          <span id="mode-status-pill" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-cyan-300 border border-cyan-500/40">
+            MANUAL HELM
+          </span>
+        </div>
+
+        <!-- Autopilot Toggle Switch -->
+        <div class="flex items-center justify-between p-2.5 rounded bg-slate-950/80 border border-cyan-800/80">
+          <div>
+            <div class="font-bold text-xs text-cyan-300 font-orbitron">AVELLANEDA-STOIKOV AUTOPILOT</div>
+            <div class="text-[10px] text-slate-400">Dynamic $r(S,Q,\sigma,\gamma)$ auto-skew helm</div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="autopilot-switch" class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+          </label>
+        </div>
+
+        <!-- Control 1: Half-Spread Slider -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between text-xs">
+            <label for="spread-slider" class="text-slate-300 font-bold">HALF-SPREAD ($\delta$):</label>
+            <span id="spread-val" class="text-cyan-300 font-mono font-bold">$0.16</span>
+          </div>
+          <input type="range" id="spread-slider" min="0.04" max="0.80" step="0.02" value="0.16" class="w-full cursor-pointer">
+          <div class="flex justify-between text-[9px] text-slate-500 font-mono">
+            <span>$0.04 (Aggressive Fills / High Risk)</span>
+            <span>$0.80 (Wide / Safe)</span>
+          </div>
+        </div>
+
+        <!-- Control 2: Skew / Steering Wheel Slider -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between text-xs">
+            <label for="skew-slider" class="text-slate-300 font-bold">QUOTE SKEW / HELM STEER:</label>
+            <span id="skew-val" class="text-cyan-300 font-mono font-bold">0.00 (CENTER)</span>
+          </div>
+          <input type="range" id="skew-slider" min="-1.0" max="1.0" step="0.05" value="0.00" class="w-full cursor-pointer">
+          <div class="flex justify-between text-[9px] text-slate-500 font-mono">
+            <span>◀ SKEW BID (BUY)</span>
+            <span>NEUTRAL</span>
+            <span>SKEW ASK (SELL) ▶</span>
+          </div>
+        </div>
+
+        <!-- Control 3: Max Inventory Limit Slider -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between text-xs">
+            <label for="maxinv-slider" class="text-slate-300 font-bold">MAX BALLAST CAPACITY ($Q_{max}$):</label>
+            <span id="maxinv-val" class="text-cyan-300 font-mono font-bold">20 UNITS</span>
+          </div>
+          <input type="range" id="maxinv-slider" min="5" max="50" step="5" value="20" class="w-full cursor-pointer">
+        </div>
+
+        <!-- Emergency Flank / Panic Button -->
+        <div class="pt-2">
+          <button id="panic-btn" class="w-full py-2.5 rounded font-orbitron font-bold text-xs bg-red-950/80 hover:bg-red-900 border border-red-500/80 text-red-200 transition shadow-lg shadow-red-950/50 flex items-center justify-center gap-2">
+            <span>🚨 EMERGENCY FLANK (CLOSE ALL INVENTORY)</span>
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-3 p-2.5 bg-sonar-panel/80 rounded border border-cyan-900/60 flex flex-wrap justify-between items-center text-[10px] text-slate-400 gap-2">
+    <div class="flex items-center gap-4">
+      <span class="text-cyan-400 font-bold font-orbitron">QUANT INSIGHTS:</span>
+      <span>1. <strong class="text-slate-300">PDF:</strong> Order flow density $\lambda(S) = A e^{-k S}$</span>
+      <span>2. <strong class="text-slate-300">CDF:</strong> Fill Probability over time</span>
+      <span>3. <strong class="text-slate-300">FTC:</strong> PnL = $\int_0^T (\text{Spread} \cdot \text{Fills}) dt$</span>
+      <span>4. <strong class="text-slate-300">A-S Reservation:</strong> $r = S - Q \gamma \sigma^2$</span>
+    </div>
+    <div class="text-slate-500 font-mono">
+      USS DELTA SSN-97 // INTEGRATED NAVAL MARKET MAKER ENGINE
+    </div>
+  </footer>
+
+  <script>
+    // --- AUDIO SYNTHESIZER (Web Audio API - No External Files) ---
+    class SonarAudio {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+      }
+
+      playPing(freq = 880, duration = 0.4) {
+        if (this.muted || !this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.4, this.ctx.currentTime + duration);
+
+          gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch(e) {}
+      }
+
+      playAlarm() {
+        if (this.muted || !this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+          osc.frequency.linearRampToValueAtTime(600, this.ctx.currentTime + 0.15);
+
+          gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.15);
+        } catch(e) {}
+      }
+    }
+
+    const audio = new SonarAudio();
+
+    // --- STATE SIMULATION ENGINE ---
+    const STATE = {
+      running: true,
+      time: 0,
+      
+      // Asset Price Mechanics (Geometric Brownian Motion + Jumps)
+      midPrice: 100.00,
+      initialPrice: 100.00,
+      volatility: 0.18, // 18% annual vol
+      drift: 0.0,
+      
+      // User Controls & Parameters
+      halfSpread: 0.16,
+      manualSkew: 0.0,
+      autopilot: false,
+      maxInventory: 20,
+      riskAversion: 0.1, // Gamma in Avellaneda-Stoikov
+      
+      // Calculated Positions
+      reservationPrice: 100.00,
+      bidPrice: 99.84,
+      askPrice: 100.16,
+      
+      // Portfolio & Risk Metrics
+      inventory: 0,
+      cash: 10000.00,
+      pnlHistory: [],
+      cumulativePnl: 0.00,
+      spreadCaptured: 0.00,
+      totalFills: 0,
+      recentFillsCount: 0,
+      fillRatePerSec: 0.0,
+      
+      // Chart History Buffers
+      historyLength: 150,
+      priceHistory: [], // { time, mid, bid, ask, reservation }
+      fillEvents: [],   // { time, price, side: 'BUY'|'SELL', id }
+      
+      // Timer Trackers
+      lastFillCheck: performance.now(),
+      fillRateInterval: performance.now()
+    };
+
+    // Initialize chart buffer
+    for (let i = 0; i < STATE.historyLength; i++) {
+      STATE.priceHistory.push({
+        time: i,
+        mid: 100.00,
+        bid: 99.84,
+        ask: 100.16,
+        reservation: 100.00
+      });
+    }
+
+    // --- DOM ELEMENTS ---
+    const canvas = document.getElementById('sonarChartCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const hudMid = document.getElementById('hud-mid');
+    const hudSpread = document.getElementById('hud-spread');
+    const hudVol = document.getElementById('hud-vol');
+    const hudMaxInv = document.getElementById('hud-max-inv');
+    const lastEventHud = document.getElementById('last-event-hud');
+
+    const metricPnl = document.getElementById('metric-pnl');
+    const metricFillrate = document.getElementById('metric-fillrate');
+    const metricSharpe = document.getElementById('metric-sharpe');
+    const metricCaptured = document.getElementById('metric-captured');
+    const metricInvBadge = document.getElementById('metric-inventory-badge');
+
+    const spreadSlider = document.getElementById('spread-slider');
+    const spreadVal = document.getElementById('spread-val');
+    const skewSlider = document.getElementById('skew-slider');
+    const skewVal = document.getElementById('skew-val');
+    const maxinvSlider = document.getElementById('maxinv-slider');
+    const maxinvVal = document.getElementById('maxinv-val');
+    const autopilotSwitch = document.getElementById('autopilot-switch');
+    const modeStatusPill = document.getElementById('mode-status-pill');
+    const panicBtn = document.getElementById('panic-btn');
+
+    const simToggle = document.getElementById('sim-toggle');
+    const simStatus = document.getElementById('sim-status');
+    const simIcon = document.getElementById('sim-icon');
+    const audioToggle = document.getElementById('audio-toggle');
+    const audioStatus = document.getElementById('audio-status');
+
+    const subHull = document.getElementById('sub-hull');
+    const subPitchAngle = document.getElementById('sub-pitch-angle');
+    const inventoryBar = document.getElementById('inventory-bar');
+    const ballastVector = document.getElementById('ballast-vector');
+
+    // --- STREAMING_CHUNK: Resize & Canvas setup ---
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // --- CONTROLS EVENT LISTENERS ---
+    spreadSlider.addEventListener('input', (e) => {
+      STATE.halfSpread = parseFloat(e.target.value);
+      spreadVal.textContent = `$${STATE.halfSpread.toFixed(2)}`;
+    });
+
+    skewSlider.addEventListener('input', (e) => {
+      STATE.manualSkew = parseFloat(e.target.value);
+      const val = STATE.manualSkew;
+      skewVal.textContent = val === 0 ? "0.00 (CENTER)" : (val < 0 ? `${val.toFixed(2)} (BUY SKEW)` : `+${val.toFixed(2)} (SELL SKEW)`);
+    });
+
+    maxinvSlider.addEventListener('input', (e) => {
+      STATE.maxInventory = parseInt(e.target.value);
+      maxinvVal.textContent = `${STATE.maxInventory} UNITS`;
+      hudMaxInv.textContent = `±${STATE.maxInventory}`;
+    });
+
+    autopilotSwitch.addEventListener('change', (e) => {
+      STATE.autopilot = e.target.checked;
+      skewSlider.disabled = STATE.autopilot;
+      skewSlider.style.opacity = STATE.autopilot ? "0.4" : "1.0";
+      
+      if (STATE.autopilot) {
+        modeStatusPill.textContent = "AUTOPILOT (A-S HELM)";
+        modeStatusPill.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/50";
+      } else {
+        modeStatusPill.textContent = "MANUAL HELM";
+        modeStatusPill.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-cyan-300 border border-cyan-500/40";
+      }
+    });
+
+    panicBtn.addEventListener('click', () => {
+      // Close out inventory instantly at current mid price (emergency flank liquidation)
+      if (STATE.inventory === 0) return;
+      
+      const closedUnits = STATE.inventory;
+      const liquidationValue = closedUnits * STATE.midPrice;
+      const slippagePenalty = Math.abs(closedUnits) * 0.05; // 5 cent market impact penalty
+      
+      STATE.cash += liquidationValue - slippagePenalty;
+      STATE.inventory = 0;
+      
+      audio.playAlarm();
+      lastEventHud.textContent = `🚨 EMERGENCY FLANK: LIQUIDATED ${closedUnits} UNITS (SLIPPAGE: -$${slippagePenalty.toFixed(2)})`;
+      lastEventHud.className = "text-red-400 font-mono font-bold animate-pulse";
+    });
+
+    simToggle.addEventListener('click', () => {
+      audio.init();
+      STATE.running = !STATE.running;
+      if (STATE.running) {
+        simStatus.textContent = "PAUSE ENGINE";
+        simIcon.textContent = "⏸";
+        simToggle.className = "flex items-center gap-2 px-4 py-1.5 rounded font-orbitron font-bold bg-emerald-600 hover:bg-emerald-500 text-slate-950 transition shadow-lg shadow-emerald-900/40";
+      } else {
+        simStatus.textContent = "RESUME ENGINE";
+        simIcon.textContent = "▶";
+        simToggle.className = "flex items-center gap-2 px-4 py-1.5 rounded font-orbitron font-bold bg-amber-600 hover:bg-amber-500 text-slate-950 transition shadow-lg shadow-amber-900/40";
+      }
+    });
+
+    audioToggle.addEventListener('click', () => {
+      audio.init();
+      audio.muted = !audio.muted;
+      audioStatus.textContent = audio.muted ? "SONAR AUDIO: OFF" : "SONAR AUDIO: ON";
+    });
+
+    function updatePhysics(dt) {
+      if (!STATE.running) return;
+
+      STATE.time += dt;
+
+      // 1. Geometric Brownian Motion for Asset Mid-Price
+      // dS = S * (mu*dt + sigma*dW)
+      const dtYears = dt / (365 * 24 * 3600 * 10); // Scaled time step
+      const shock = (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 1.732; // Normal approx
+      
+      // Random Volatility Jump Spikes
+      let currentVol = STATE.volatility;
+      if (Math.random() < 0.005) { // 0.5% chance of sonar depth turbulence
+        currentVol *= 2.5;
+        lastEventHud.textContent = "⚠️ SONAR TURBULENCE: VOLATILITY SPIKE!";
+        lastEventHud.className = "text-amber-400 font-mono font-bold";
+      }
+
+      const dS = STATE.midPrice * (STATE.drift * dtYears + currentVol * Math.sqrt(dtYears) * shock);
+      STATE.midPrice = Math.max(10.0, STATE.midPrice + dS);
+
+      // 2. Compute Reservation Price & Quotes (Avellaneda-Stoikov Framework)
+      // r(S, q, sigma, gamma) = S - q * gamma * sigma^2
+      const gamma = STATE.riskAversion;
+      const q = STATE.inventory;
+      const sigmaSq = currentVol * currentVol;
+      
+      // Avellaneda-Stoikov Reservation Price
+      STATE.reservationPrice = STATE.midPrice - (q * gamma * sigmaSq * 100);
+
+      if (STATE.autopilot) {
+        // Autopilot dynamically sets Bid/Ask around reservation price
+        STATE.bidPrice = STATE.reservationPrice - STATE.halfSpread;
+        STATE.askPrice = STATE.reservationPrice + STATE.halfSpread;
+      } else {
+        // Manual control: apply user steering skew shift
+        const skewShift = STATE.manualSkew * STATE.halfSpread * 0.8;
+        STATE.bidPrice = STATE.midPrice - STATE.halfSpread + skewShift;
+        STATE.askPrice = STATE.midPrice + STATE.halfSpread + skewShift;
+      }
+
+      // 3. Order Flow Generation (Poisson Intensity Lambda)
+      // Intensity lambda(delta) = A * exp(-k * delta)
+      const distBid = Math.max(0.01, STATE.midPrice - STATE.bidPrice);
+      const distAsk = Math.max(0.01, STATE.askPrice - STATE.midPrice);
+
+      const A = 1.2; // Base order arrival rate
+      const k = 4.5; // Price sensitivity constant
+
+      const lambdaBid = A * Math.exp(-k * distBid);
+      const lambdaAsk = A * Math.exp(-k * distAsk);
+
+      // Probabilities of fill in time step dt
+      const probBidFill = 1 - Math.exp(-lambdaBid * dt * 2.5);
+      const probAskFill = 1 - Math.exp(-lambdaAsk * dt * 2.5);
+
+      // Check Bid Fill (Market Sell hits our Bid -> We Buy +1)
+      if (Math.random() < probBidFill && STATE.inventory < STATE.maxInventory) {
+        STATE.inventory += 1;
+        STATE.cash -= STATE.bidPrice;
+        STATE.spreadCaptured += STATE.halfSpread;
+        STATE.totalFills++;
+        STATE.recentFillsCount++;
+        
+        audio.playPing(600, 0.3); // Low sonar ping for BUY fill
+        STATE.fillEvents.push({ time: STATE.time, price: STATE.bidPrice, side: 'BUY' });
+        lastEventHud.textContent = `🟢 TORPEDO HIT: BOUGHT @ $${STATE.bidPrice.toFixed(2)}`;
+        lastEventHud.className = "text-emerald-400 font-mono font-bold";
+      }
+
+      // Check Ask Fill (Market Buy hits our Ask -> We Sell -1)
+      if (Math.random() < probAskFill && STATE.inventory > -STATE.maxInventory) {
+        STATE.inventory -= 1;
+        STATE.cash += STATE.askPrice;
+        STATE.spreadCaptured += STATE.halfSpread;
+        STATE.totalFills++;
+        STATE.recentFillsCount++;
+
+        audio.playPing(1100, 0.3); // High sonar ping for SELL fill
+        STATE.fillEvents.push({ time: STATE.time, price: STATE.askPrice, side: 'SELL' });
+        lastEventHud.textContent = `🔴 TORPEDO HIT: SOLD @ $${STATE.askPrice.toFixed(2)}`;
+        lastEventHud.className = "text-red-400 font-mono font-bold";
+      }
+
+      // 4. Calculate PnL & Risk Metrics
+      // Mark-to-Market PnL = Cash + Inventory * MidPrice - InitialCash
+      const markToMarketPnL = STATE.cash + (STATE.inventory * STATE.midPrice) - 10000.00;
+      STATE.cumulativePnl = markToMarketPnL;
+      STATE.pnlHistory.push(markToMarketPnL);
+      if (STATE.pnlHistory.length > 200) STATE.pnlHistory.shift();
+
+      // Push history to buffer for chart rendering
+      STATE.priceHistory.push({
+        time: STATE.time,
+        mid: STATE.midPrice,
+        bid: STATE.bidPrice,
+        ask: STATE.askPrice,
+        reservation: STATE.reservationPrice
+      });
+      if (STATE.priceHistory.length > STATE.historyLength) {
+        STATE.priceHistory.shift();
+      }
+
+      // 5. Update Fill Rate Counter (per sec)
+      const now = performance.now();
+      if (now - STATE.fillRateInterval > 1000) {
+        STATE.fillRatePerSec = STATE.recentFillsCount;
+        STATE.recentFillsCount = 0;
+        STATE.fillRateInterval = now;
+      }
+    }
+
+    function renderHUD() {
+      // Text metrics
+      hudMid.textContent = STATE.midPrice.toFixed(2);
+      hudSpread.textContent = (STATE.askPrice - STATE.bidPrice).toFixed(2);
+      metricPnl.textContent = `${STATE.cumulativePnl >= 0 ? '+' : ''}$${STATE.cumulativePnl.toFixed(2)}`;
+      metricPnl.className = `text-lg md:text-xl font-bold font-orbitron ${STATE.cumulativePnl >= 0 ? 'text-emerald-400 text-glow-green' : 'text-red-400 text-glow-red'}`;
+
+      metricFillrate.textContent = `${STATE.fillRatePerSec.toFixed(1)} /s`;
+      metricCaptured.textContent = `$${STATE.spreadCaptured.toFixed(2)}`;
+
+      // Compute Sharpe Ratio Approximation
+      if (STATE.pnlHistory.length > 10) {
+        const returns = [];
+        for (let i = 1; i < STATE.pnlHistory.length; i++) {
+          returns.push(STATE.pnlHistory[i] - STATE.pnlHistory[i - 1]);
+        }
+        const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+        const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length;
+        const stdDev = Math.sqrt(variance);
+        const sharpe = stdDev > 0 ? (mean / stdDev) * Math.sqrt(252) : 0;
+        metricSharpe.textContent = sharpe.toFixed(2);
+      }
+
+      // Update Submarine Pitch & Ballast visual representation
+      const maxQ = STATE.maxInventory;
+      const currentQ = STATE.inventory;
+      const invRatio = Math.max(-1, Math.min(1, currentQ / maxQ));
+      
+      // Pitch Submarine: Positive inventory (Long) tilts bow down (diving), Negative tilts up
+      const pitchAngle = invRatio * -22.0; // Up to 22 degree rotation
+      subHull.style.transform = `rotate(${pitchAngle}deg)`;
+      subPitchAngle.textContent = `${pitchAngle.toFixed(1)}°`;
+
+      // Ballast Bar Width & Color
+      const absRatio = Math.abs(invRatio) * 50; // Max 50% left or right
+      inventoryBar.style.width = `${absRatio}%`;
+      
+      if (invRatio >= 0) {
+        inventoryBar.style.left = '50%';
+        inventoryBar.className = `absolute top-0 bottom-0 transition-all duration-200 ${absRatio > 40 ? 'bg-red-500' : absRatio > 25 ? 'bg-amber-500' : 'bg-emerald-500'}`;
+      } else {
+        inventoryBar.style.left = `${50 - absRatio}%`;
+        inventoryBar.className = `absolute top-0 bottom-0 transition-all duration-200 ${absRatio > 40 ? 'bg-red-500' : absRatio > 25 ? 'bg-amber-500' : 'bg-emerald-500'}`;
+      }
+
+      // Inventory Badge Status
+      if (currentQ === 0) {
+        metricInvBadge.textContent = "Q = 0 (NEUTRAL)";
+        metricInvBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/50";
+        ballastVector.textContent = "TRIM: OK";
+      } else if (currentQ > 0) {
+        metricInvBadge.textContent = `Q = +${currentQ} (HEAVY LONG)`;
+        metricInvBadge.className = `px-2 py-0.5 rounded text-[10px] font-bold ${currentQ >= maxQ * 0.8 ? 'bg-red-950 text-red-300 border border-red-500' : 'bg-emerald-950 text-emerald-300 border border-emerald-500'}`;
+        ballastVector.textContent = `BOW HEAVY (+${currentQ})`;
+      } else {
+        metricInvBadge.textContent = `Q = ${currentQ} (HEAVY SHORT)`;
+        metricInvBadge.className = `px-2 py-0.5 rounded text-[10px] font-bold ${Math.abs(currentQ) >= maxQ * 0.8 ? 'bg-red-950 text-red-300 border border-red-500' : 'bg-cyan-950 text-cyan-300 border border-cyan-500'}`;
+        ballastVector.textContent = `STERN HEAVY (${currentQ})`;
+      }
+    }
+
+    function renderCanvas() {
+      const w = canvas.width / window.devicePixelRatio;
+      const h = canvas.height / window.devicePixelRatio;
+
+      // Clear & Background
+      ctx.fillStyle = '#030d14';
+      ctx.fillRect(0, 0, w, h);
+
+      const history = STATE.priceHistory;
+      if (history.length < 2) return;
+
+      // Calculate Y-scale min & max from visible price history
+      let minP = Infinity;
+      let maxP = -Infinity;
+      for (let p of history) {
+        minP = Math.min(minP, p.bid, p.mid, p.ask);
+        maxP = Math.max(maxP, p.bid, p.mid, p.ask);
+      }
+      // Add padding
+      const padding = Math.max(0.4, (maxP - minP) * 0.25);
+      minP -= padding;
+      maxP += padding;
+
+      function getY(price) {
+        return h - ((price - minP) / (maxP - minP)) * (h - 40) - 20;
+      }
+
+      function getX(index) {
+        return (index / (STATE.historyLength - 1)) * w;
+      }
+
+      // Draw Grid Lines & Sonar Depth Scale
+      ctx.strokeStyle = 'rgba(14, 165, 233, 0.12)';
+      ctx.lineWidth = 1;
+      const gridSteps = 5;
+      for (let i = 0; i <= gridSteps; i++) {
+        const p = minP + (i / gridSteps) * (maxP - minP);
+        const y = getY(p);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.4)';
+        ctx.font = '9px "Share Tech Mono"';
+        ctx.fillText(`$${p.toFixed(2)}`, 10, y - 3);
+      }
+
+      // 1. Draw Reservation Price Line $r$ (Dashed Amber)
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      for (let i = 0; i < history.length; i++) {
+        const x = getX(i);
+        const y = getY(history[i].reservation);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]); // Reset dash
+
+      // 2. Draw Bid & Ask Quotes Band (Shaded Tactical Corridor)
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.05)';
+      ctx.beginPath();
+      for (let i = 0; i < history.length; i++) {
+        const x = getX(i);
+        const yAsk = getY(history[i].ask);
+        if (i === 0) ctx.moveTo(x, yAsk);
+        else ctx.lineTo(x, yAsk);
+      }
+      for (let i = history.length - 1; i >= 0; i--) {
+        const x = getX(i);
+        const yBid = getY(history[i].bid);
+        ctx.lineTo(x, yBid);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // 3. Draw Bid Line (Emerald Green)
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < history.length; i++) {
+        const x = getX(i);
+        const y = getY(history[i].bid);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // 4. Draw Ask Line (Rose Red)
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < history.length; i++) {
+        const x = getX(i);
+        const y = getY(history[i].ask);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // 5. Draw Mid-Price Sea Level Line (Cyan Glow)
+      ctx.strokeStyle = '#06b6d4';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#06b6d4';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      for (let i = 0; i < history.length; i++) {
+        const x = getX(i);
+        const y = getY(history[i].mid);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0; // Reset shadow glow
+
+      // 6. Draw Torpedo Fill Execution Blips / Sonar Waves
+      const nowTime = STATE.time;
+      STATE.fillEvents = STATE.fillEvents.filter(e => nowTime - e.time < 3.0); // Keep last 3 secs
+      
+      for (let event of STATE.fillEvents) {
+        const age = nowTime - event.time;
+        const radius = age * 25; // Expanding sonar ring
+        const alpha = Math.max(0, 1 - age / 3.0);
+
+        // Find position corresponding to current x
+        const lastX = w - 10;
+        const lastY = getY(event.price);
+
+        ctx.strokeStyle = event.side === 'BUY' ? `rgba(16, 185, 129, ${alpha})` : `rgba(239, 68, 68, ${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = event.side === 'BUY' ? '#10b981' : '#ef4444';
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 7. Right Edge Radar Reticle Markers
+      const currentMidY = getY(STATE.midPrice);
+      const currentBidY = getY(STATE.bidPrice);
+      const currentAskY = getY(STATE.askPrice);
+
+      // Mid dot
+      ctx.fillStyle = '#06b6d4';
+      ctx.beginPath();
+      ctx.arc(w - 6, currentMidY, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bid / Ask targets
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(w - 12, currentBidY - 2, 10, 4);
+
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(w - 12, currentAskY - 2, 10, 4);
+    }
+
+    let lastTimestamp = performance.now();
+
+    function gameLoop(timestamp) {
+      const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000); // Frame delta in secs
+      lastTimestamp = timestamp;
+
+      updatePhysics(dt);
+      renderHUD();
+      renderCanvas();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    window.onload = function() {
+      // Start loop on load
+      requestAnimationFrame(gameLoop);
+    };
+  </script>
+</body>
+</html>
